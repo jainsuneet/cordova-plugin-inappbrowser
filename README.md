@@ -100,7 +100,7 @@ instance, or the system browser.
 
     - `_self`: Opens in the Cordova WebView. On Android, non-whitelisted URLs fall back to the `InAppBrowser`. On iOS, the current implementation does not perform this fallback and navigation remains in the Cordova WebView (subject to `<allow-navigation>`).
     - `_blank`: Opens in the `InAppBrowser`.
-    - `_system`: Opens in the system's web browser.
+    - `_system`: Opens in the system's web browser. On iOS, this fork guards the open with `-[UIApplication canOpenURL:]`. For non-`http(s)` schemes (e.g. `tel:`, `mailto:`, `sms:`, custom app schemes), the host app's `Info.plist` must declare each scheme under `LSApplicationQueriesSchemes`, otherwise the open is suppressed. See [iOS Quirks](#ios-quirks).
 
 - __options__: Options for the `InAppBrowser`. Optional, defaulting to: `location=yes`. _(String)_
 
@@ -183,6 +183,24 @@ Since the introduction of iPadOS 13, iPads try to adapt their content mode / use
 The example above forces the user agent to contain `iPad`. The other option is to use the value `desktop` to turn the user agent to `Macintosh`.
 
 The current iOS implementation of `target='_self'` does not fall back to `InAppBrowser` for non-whitelisted URLs. If you need guaranteed `InAppBrowser` behavior on iOS, use `target='_blank'`.
+
+#### `target='_system'` and `LSApplicationQueriesSchemes`
+
+This fork checks `-[UIApplication canOpenURL:]` before delegating to `-[UIApplication openURL:options:completionHandler:]` when opening a URL with `target='_system'`. Since iOS 9, `canOpenURL:` returns `NO` for any URL scheme that is not declared in the host app's `Info.plist` under `LSApplicationQueriesSchemes` — even when the system could actually open it. In that case, the open is suppressed and a `CDVPluginHandleOpenURLNotification` is posted instead of the URL being launched.
+
+For `http` and `https` URLs no declaration is needed. For any other scheme the app must open via `target='_system'` (e.g. `tel:`, `mailto:`, `sms:`, `whatsapp:`, deep links into other apps, custom URI schemes), add each scheme to `Info.plist` in the host app:
+
+```xml
+<key>LSApplicationQueriesSchemes</key>
+<array>
+    <string>tel</string>
+    <string>mailto</string>
+    <string>sms</string>
+    <!-- add every scheme the app opens via target='_system' -->
+</array>
+```
+
+In a Cordova project this is typically configured via `<config-file>` entries in `config.xml` or platform-specific Info.plist edits.
 
 ### Browser Quirks
 
